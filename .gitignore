@@ -1,0 +1,24 @@
+# User-specific files
+*.suo
+*.user
+*.userosscache
+*.sln.docstates
+.vs
+/bin/
+*.cache
+*.pdb
+*.assets.json
+*.g.target
+*.g.props
+[Dd]ebug/
+[Dd]ebugPublic/
+[Rr]elease/
+[Rr]eleases/
+[Pp]packages/
+x64/
+x86/
+bld/
+[Bb]in/
+[Oo]bj/
+[Ll]og/
+/sdk/packages
