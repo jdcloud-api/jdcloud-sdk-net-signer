@@ -10,6 +10,7 @@
 *.assets.json
 *.g.target
 *.g.props
+*.nuget
 [Dd]ebug/
 [Dd]ebugPublic/
 [Rr]elease/
@@ -21,4 +22,4 @@ bld/
 [Bb]in/
 [Oo]bj/
 [Ll]og/
-/sdk/packages
+packages/
