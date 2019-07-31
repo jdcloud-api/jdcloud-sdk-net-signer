@@ -4,9 +4,7 @@
 
 ## 简介
 
-此包为京东云 dotnet SDK 的签名包，使用签名包可以通过open Api 或者 APIM 网关调用后端的服务
-&emsp;&emsp;欢迎使用京东云开发者 .NET 签名工具套件（.NET SDK）。使用京东云 .NET SDK，您无需复杂编程就可以访问京东云提供的各种服务。  
-
+&emsp;&emsp;此包为京东云 dotnet SDK 的签名包，使用签名包可以通过open Api 或者 APIM 网关调用后端的服务。  
 &emsp;&emsp;为了方便您理解SDK中的一些概念和参数的含义，使用SDK前建议您先查看OpenAPI使用入门。要了解每个API的具体参数和含义，请参考程序注释或参考[OpenAPI&SDK](https://www.jdcloud.com/help/faq?act=3)下具体产品线的API文档。
 
 ## 环境准备 & 编译
