@@ -3,7 +3,6 @@ using JDCloudSDK.Core.Common;
 using JDCloudSDK.Core.Utils;
 using System;
 using System.Collections.Generic;
-using System.Security.Cryptography;
 using System.Text;
 using System.Linq;
 using System.Globalization;
@@ -345,7 +344,7 @@ namespace JDCloudSDK.Core.Auth.Sign
             try
             {
                 byte[] content = requestModel.Content;
-                if (content != null && content.Length>0)
+                if (content == null || content.Length<=0)
                 {
                     content = new byte[0];
                 }

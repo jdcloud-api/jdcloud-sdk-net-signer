@@ -38,7 +38,8 @@ namespace JDCloudSDK.Core.Extensions
             if (requestContent != null) {
                 using (var contentStream = new MemoryStream())
                 {
-                    requestContent.CopyToAsync(contentStream).RunSynchronously();
+                    requestContent.CopyToAsync(contentStream).Wait();
+                    //requestContent.CopyToAsync(contentStream).RunSynchronously();
                     if (contentStream.Length > 0)
                     {
                         requestModel.Content = contentStream.ToArray();
