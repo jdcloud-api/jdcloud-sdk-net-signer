@@ -8,10 +8,12 @@ using Newtonsoft.Json;
 using System;
 using System.Collections.Generic;
 using System.IO;
+#if !(NET30||NET20)
 using System.Linq;
+#endif
 using JDCloudSDK.Core.Config;
 
-#if NET35 || NET40
+#if NET35 || NET40 ||NET30 ||NET20
 using System.Net;
 #else
 using System.Net.Http;
@@ -26,7 +28,7 @@ namespace JDCloudSDK.Core.Extensions
     public static class HttpExtensions
     {
 
-#if NET35 || NET40
+#if NET35 || NET40 ||NET30||NET20
 
         /// <summary>
         /// 扩展签名方法
@@ -43,18 +45,17 @@ namespace JDCloudSDK.Core.Extensions
             var byteContent = new byte[0];
             if (bodyContent != null) {
                 if (isWriteBody)
-                { 
-                    var httpRequestWrite = httpWebRequest.GetRequestStream();
-
+                {  
                     if (bodyContent is byte[])
                     {
-                         byteContent = (byte[])bodyContent;
-                        httpRequestWrite.Write(byteContent, 0, byteContent.Length);
+                        byteContent = (byte[])bodyContent; 
                     }
                     else if (bodyContent is string)
                     {
-                         byteContent = System.Text.Encoding.UTF8.GetBytes((string)bodyContent);
-                        httpRequestWrite.Write(byteContent, 0, byteContent.Length);
+                        byteContent = System.Text.Encoding.UTF8.GetBytes((string)bodyContent);
+                      //  httpWebRequest.ContentLength = byteContent.Length;
+                      //  httpRequestWrite.Write(byteContent, 0, byteContent.Length);
+                       
                     }
                     else if (bodyContent is int || bodyContent is long || bodyContent is bool || bodyContent is float || bodyContent is double)
                     {  
@@ -77,8 +78,10 @@ namespace JDCloudSDK.Core.Extensions
                         else if (bodyContent is double)
                         {
                             byteContent = BitConverter.GetBytes((double)bodyContent);
-                        } 
-                        httpRequestWrite.Write(byteContent, 0, byteContent.Length);
+                        }
+                      //  httpWebRequest.ContentLength = byteContent.Length;
+                      //  httpRequestWrite.Write(byteContent, 0, byteContent.Length);
+                        
                     }
                      
                     else
@@ -87,9 +90,12 @@ namespace JDCloudSDK.Core.Extensions
                         if (!requestJson.IsNullOrWhiteSpace())
                         {
                             byteContent = System.Text.Encoding.UTF8.GetBytes((string)bodyContent);
-                            httpRequestWrite.Write(byteContent, 0, byteContent.Length);
+                         //   httpWebRequest.ContentLength = byteContent.Length;
+                         //   httpRequestWrite.Write(byteContent, 0, byteContent.Length);
+                           
                         }
                     }
+                    
                 }
             }
             var headers = httpWebRequest.Headers;
@@ -97,9 +103,11 @@ namespace JDCloudSDK.Core.Extensions
             var queryString = requestUri.Query;
             var requestPath = requestUri.AbsolutePath;
             var requestContent =  bodyContent;
+            
             var requestMethod = httpWebRequest.Method;
             string apiVersion = requestUri.GetRequestVersion();
             RequestModel requestModel = new RequestModel();
+            requestModel.Content = (byte[])byteContent.Clone();
             requestModel.ApiVersion = apiVersion;
            
             if (!httpWebRequest.ContentType.IsNullOrWhiteSpace()  ) {
@@ -155,6 +163,15 @@ namespace JDCloudSDK.Core.Extensions
                 if (httpWebRequest.Headers.GetValues(key) == null) {
                     var value = signedHeader[key];
                     httpWebRequest.Headers.Add(key, value); 
+                }
+            }
+            if (byteContent.Length > 0)
+            {
+
+                httpWebRequest.ContentLength = byteContent.Length;
+                using (var httpRequestWrite = httpWebRequest.GetRequestStream())
+                {
+                    httpRequestWrite.Write(byteContent, 0, byteContent.Length);
                 }
             }
             return httpWebRequest;

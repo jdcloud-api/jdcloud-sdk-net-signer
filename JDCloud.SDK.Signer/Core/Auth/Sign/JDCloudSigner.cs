@@ -4,7 +4,9 @@ using JDCloudSDK.Core.Utils;
 using System;
 using System.Collections.Generic; 
 using System.Text;
+#if !NET20&&!NET30
 using System.Linq;
+#endif
 using System.Globalization;
 
 namespace JDCloudSDK.Core.Auth.Sign
@@ -49,14 +51,29 @@ namespace JDCloudSDK.Core.Auth.Sign
         /// <returns></returns>
         public SignedRequestModel Sign(RequestModel requestModel, Credential credentials) {
             string nonceId = "";
-            if (requestModel.NonceId.IsNullOrWhiteSpace())
+            if (!requestModel.NonceId.IsNullOrWhiteSpace())
+            {
+                nonceId = requestModel.NonceId;
+            }
+            else if (requestModel.Header != null &&
+                 requestModel.Header.Count > 0 &&
+                 requestModel.Header.ContainsKey(ParameterConstant.X_JDCLOUD_NONCE))
+            {
+                List<string> headValues = requestModel.Header[ParameterConstant.X_JDCLOUD_NONCE];
+                if (headValues != null && headValues.Count > 0)
+                {
+                    nonceId = headValues[0];
+                }
+                else
+                {
+                    nonceId = Guid.NewGuid().ToString().ToLower();
+                }
+            }
+            else
             {
                 nonceId = Guid.NewGuid().ToString().ToLower();
             }
-            else {
-                nonceId = requestModel.NonceId;
-            }
-            
+
             var signDate = requestModel.OverrddenDate == null ? DateTime.Now:requestModel.OverrddenDate.Value;
             string formattedSigningDateTime = signDate.ToString(ParameterConstant.DATA_TIME_FORMAT);
             string formattedSigningDate = signDate.ToString(ParameterConstant.HEADER_DATA_FORMAT);
@@ -64,8 +81,11 @@ namespace JDCloudSDK.Core.Auth.Sign
             var requestHeader = requestModel.Header;
             requestHeader.Add(ParameterConstant.X_JDCLOUD_DATE,
                               new List<string> { formattedSigningDateTime } );
-            requestHeader.Add(ParameterConstant.X_JDCLOUD_NONCE, 
-                              new List<string> { nonceId });
+            if (!requestModel.Header.ContainsKey(ParameterConstant.X_JDCLOUD_NONCE)) {
+                requestHeader.Add(ParameterConstant.X_JDCLOUD_NONCE,
+                                new List<string> { nonceId });
+            }
+          
             var contentSHA256 = "";
             if (requestHeader.ContainsKey(ParameterConstant.X_JDCLOUD_CONTENT_SHA256))
             {
@@ -192,7 +212,17 @@ namespace JDCloudSDK.Core.Auth.Sign
             }
             if (paramDic != null && paramDic.Count > 0) {
                 StringBuilder resultBuilder = new StringBuilder();
+#if !NET20 && !NET30
                 var orderParamDic = paramDic.OrderBy(p => p.Key);
+#else
+
+
+                var orderParamDic = new SortedDictionary<string, string>(); ;
+                foreach (var item in paramDic)
+                {
+                    orderParamDic.Add(item.Key, item.Value);
+                }
+#endif
                 foreach (var param in orderParamDic) {
                     resultBuilder.Append(param.Key).Append("=").Append(param.Value);
                     resultBuilder.Append("&");
@@ -212,11 +242,20 @@ namespace JDCloudSDK.Core.Auth.Sign
         /// <returns>签名头信息字符串</returns>
         private string GetSignedHeadersString(RequestModel requestModel)
         {
-            var headers = requestModel.Header;
+            var headers = requestModel.Header; 
+#if !NET20 && !NET30
             var keys = headers.Keys;
             List<string> keysList = keys.ToList().OrderBy(p => p.ToLower(CultureInfo.GetCultureInfo("en-US"))).ToList();
+#else
+            List<string> keysList = new List<string>();
+            foreach (var item in headers.Keys)
+            {
+                keysList.Add(item);
+            }
+            keysList.Sort();
+#endif
             StringBuilder stringBuilder = new StringBuilder();
-            foreach (String header in keysList)
+            foreach (string header in keysList)
             {
                 if (ShouldExcludeHeaderFromSigning(header))
                 {
@@ -238,9 +277,18 @@ namespace JDCloudSDK.Core.Auth.Sign
         /// <returns>规范化头信息字符串</returns>
         private string GetCanonicalizedHeaderString(RequestModel requestModel)
         {
-            var headers = requestModel.Header;
+            var headers = requestModel.Header; 
+#if !NET20 && !NET30
             var keys = headers.Keys;
             List<string> keysList = keys.ToList().OrderBy(p => p.ToLower(CultureInfo.GetCultureInfo("en-US"))).ToList();
+#else
+            List<string> keysList = new List<string>();
+            foreach (var item in headers.Keys)
+            {
+                keysList.Add(item);
+            }
+            keysList.Sort();
+#endif
             StringBuilder stringBuilder = new StringBuilder();
             foreach (var item in keysList)
             {
@@ -274,7 +322,20 @@ namespace JDCloudSDK.Core.Auth.Sign
         /// <returns>是否是需要排除的头信息</returns>
         private bool ShouldExcludeHeaderFromSigning(string header)
         {
+#if !NET20 && !NET30
             return LIST_OF_HEADERS_TO_IGNORE_IN_LOWER_CASE.Contains(header.ToLower());
+#else
+            var result = false;
+            foreach (var item in LIST_OF_HEADERS_TO_IGNORE_IN_LOWER_CASE)
+            {
+                if (header.ToLower() == item.ToLower())
+                {
+                    result = true;
+
+                }
+            }
+            return result;
+#endif 
         }
 
 
