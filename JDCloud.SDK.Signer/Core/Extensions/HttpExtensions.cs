@@ -78,9 +78,7 @@ namespace JDCloudSDK.Core.Extensions
                         else if (bodyContent is double)
                         {
                             byteContent = BitConverter.GetBytes((double)bodyContent);
-                        }
-                      //  httpWebRequest.ContentLength = byteContent.Length;
-                      //  httpRequestWrite.Write(byteContent, 0, byteContent.Length);
+                        } 
                         
                     }
                      
@@ -89,10 +87,7 @@ namespace JDCloudSDK.Core.Extensions
                         var requestJson = JsonConvert.SerializeObject(bodyContent);
                         if (!requestJson.IsNullOrWhiteSpace())
                         {
-                            byteContent = System.Text.Encoding.UTF8.GetBytes((string)bodyContent);
-                         //   httpWebRequest.ContentLength = byteContent.Length;
-                         //   httpRequestWrite.Write(byteContent, 0, byteContent.Length);
-                           
+                            byteContent = System.Text.Encoding.UTF8.GetBytes((string)bodyContent); 
                         }
                     }
                     
