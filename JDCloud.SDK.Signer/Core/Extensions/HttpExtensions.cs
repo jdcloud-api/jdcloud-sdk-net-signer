@@ -1,16 +1,19 @@
 ﻿using JDCloudSDK.Core.Auth;
 using JDCloudSDK.Core.Auth.Sign;
+using JDCloudSDK.Core.Common; 
 using JDCloudSDK.Core.Model;
 using JDCloudSDK.Core.Extensions;
 using JDCloudSDK.Core.Utils;
-using JDCloudSDK.Core.Common;
 using Newtonsoft.Json;
 using System;
 using System.Collections.Generic;
 using System.IO;
+#if !(NET30||NET20)
 using System.Linq;
+#endif
+using JDCloudSDK.Core.Config;
 
-#if NET35 || NET40
+#if NET35 || NET40 ||NET30 ||NET20
 using System.Net;
 #else
 using System.Net.Http;
@@ -25,7 +28,7 @@ namespace JDCloudSDK.Core.Extensions
     public static class HttpExtensions
     {
 
-#if NET35 || NET40
+#if NET35 || NET40 ||NET30||NET20
 
         /// <summary>
         /// 扩展签名方法
@@ -38,22 +41,21 @@ namespace JDCloudSDK.Core.Extensions
         /// <param name="overrideDate"></param>
         /// <param name="isWriteBody"></param>
         /// <returns></returns>
-        public static HttpWebRequest DoSign(this HttpWebRequest httpWebRequest, Credential credentials, string serviceName = null, object bodyContent = null,bool isWriteBody =false,string signType = null, DateTime? overrideDate = null) {
+        public static HttpWebRequest DoSign(this HttpWebRequest httpWebRequest, Credential credentials, string serviceName = null, object bodyContent = null,bool isWriteBody =false,JDCloudSignVersionType? signType = null, DateTime? overrideDate = null) {
             var byteContent = new byte[0];
             if (bodyContent != null) {
                 if (isWriteBody)
-                { 
-                    var httpRequestWrite = httpWebRequest.GetRequestStream();
-
+                {  
                     if (bodyContent is byte[])
                     {
-                         byteContent = (byte[])bodyContent;
-                        httpRequestWrite.Write(byteContent, 0, byteContent.Length);
+                        byteContent = (byte[])bodyContent; 
                     }
                     else if (bodyContent is string)
                     {
-                         byteContent = System.Text.Encoding.UTF8.GetBytes((string)bodyContent);
-                        httpRequestWrite.Write(byteContent, 0, byteContent.Length);
+                        byteContent = System.Text.Encoding.UTF8.GetBytes((string)bodyContent);
+                      //  httpWebRequest.ContentLength = byteContent.Length;
+                      //  httpRequestWrite.Write(byteContent, 0, byteContent.Length);
+                       
                     }
                     else if (bodyContent is int || bodyContent is long || bodyContent is bool || bodyContent is float || bodyContent is double)
                     {  
@@ -77,18 +79,18 @@ namespace JDCloudSDK.Core.Extensions
                         {
                             byteContent = BitConverter.GetBytes((double)bodyContent);
                         } 
-                        httpRequestWrite.Write(byteContent, 0, byteContent.Length);
+                        
                     }
-                    
+                     
                     else
                     {
                         var requestJson = JsonConvert.SerializeObject(bodyContent);
                         if (!requestJson.IsNullOrWhiteSpace())
                         {
-                            byteContent = System.Text.Encoding.UTF8.GetBytes((string)bodyContent);
-                            httpRequestWrite.Write(byteContent, 0, byteContent.Length);
+                            byteContent = System.Text.Encoding.UTF8.GetBytes((string)bodyContent); 
                         }
                     }
+                    
                 }
             }
             var headers = httpWebRequest.Headers;
@@ -96,10 +98,13 @@ namespace JDCloudSDK.Core.Extensions
             var queryString = requestUri.Query;
             var requestPath = requestUri.AbsolutePath;
             var requestContent =  bodyContent;
+            
             var requestMethod = httpWebRequest.Method;
             string apiVersion = requestUri.GetRequestVersion();
             RequestModel requestModel = new RequestModel();
+            requestModel.Content = (byte[])byteContent.Clone();
             requestModel.ApiVersion = apiVersion;
+           
             if (!httpWebRequest.ContentType.IsNullOrWhiteSpace()  ) {
                 requestModel.ContentType = httpWebRequest.ContentType.ToString();
             } 
@@ -128,7 +133,12 @@ namespace JDCloudSDK.Core.Extensions
                 }
                 requestModel.ServiceName = serviceName;
             }
-            requestModel.SignType = ParameterConstant.SIGN_SHA256;
+            JDCloudSignVersionType jDCloudSignVersionType = GlobalConfig.GetInstance().SignVersionType;
+            if (signType != null&&signType.HasValue)
+            {
+                jDCloudSignVersionType = signType.Value;
+            }
+            requestModel.SignType = jDCloudSignVersionType; 
             requestModel.Uri = requestUri;
             requestModel.QueryParameters = queryString;
             requestModel.OverrddenDate = overrideDate;
@@ -141,13 +151,22 @@ namespace JDCloudSDK.Core.Extensions
             {
                 requestModel.AddHeader(headerKeyValue,   headers.Get(headerKeyValue));
             }
-            JDCloudSigner jDCloudSigner = new JDCloudSigner();
+            IJDCloudSigner jDCloudSigner = SignUtil.GetJDCloudSigner(jDCloudSignVersionType);
             SignedRequestModel signedRequestModel = jDCloudSigner.Sign(requestModel, credentials);
             var signedHeader = signedRequestModel.RequestHead;
             foreach(var key in signedHeader.Keys) {
                 if (httpWebRequest.Headers.GetValues(key) == null) {
                     var value = signedHeader[key];
                     httpWebRequest.Headers.Add(key, value); 
+                }
+            }
+            if (byteContent.Length > 0)
+            {
+
+                httpWebRequest.ContentLength = byteContent.Length;
+                using (var httpRequestWrite = httpWebRequest.GetRequestStream())
+                {
+                    httpRequestWrite.Write(byteContent, 0, byteContent.Length);
                 }
             }
             return httpWebRequest;
@@ -163,7 +182,7 @@ namespace JDCloudSDK.Core.Extensions
         /// <param name="overrideDate">the sign date override</param>
         /// <param name="signType">the jdcloud sign method type</param>
         /// <returns></returns>
-        public static HttpClientWrapper DoSign(this HttpClient httpClient, Credentials credentials,string serviceName= null,string signType = null, DateTime? overrideDate = null)
+        public static HttpClientWrapper DoSign(this HttpClient httpClient, Credentials credentials,string serviceName= null,JDCloudSignVersionType signType = JDCloudSignVersionType.JDCloud_V2, DateTime? overrideDate = null)
         {
             HttpClientWrapper httpClientWrapper = new HttpClientWrapper(httpClient, credentials, serviceName,signType, overrideDate); 
             return httpClientWrapper;

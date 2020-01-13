@@ -1,8 +1,10 @@
-﻿#if!(NET35||NET40)
+﻿#if !(NET35 || NET40 ||NET30 ||NET20)
 using JDCloudSDK.Core.Auth;
 using JDCloudSDK.Core.Auth.Sign;
 using JDCloudSDK.Core.Common;
+using JDCloudSDK.Core.Config;
 using JDCloudSDK.Core.Model;
+using JDCloudSDK.Core.Utils;
 using System;
 using System.Collections.Generic;
 using System.IO;
@@ -25,7 +27,8 @@ namespace JDCloudSDK.Core.Extensions
         /// <param name="signType">the signType now support HMACSHA256</param>
         /// <param name="serviceName">the current http request request serviceName</param>
         /// <returns></returns>
-        public static HttpRequestMessage DoRequestMessageSign(this HttpRequestMessage httpRequestMessage, Credential credentials,string serviceName = null,string signType = null,DateTime? overWriteDate = null) {
+        public static HttpRequestMessage DoRequestMessageSign(this HttpRequestMessage httpRequestMessage, Credential credentials,
+            string serviceName = null,  DateTime? overWriteDate = null, JDCloudSignVersionType? signType = null) {
             var headers =   httpRequestMessage.Headers;
             var requestUri = httpRequestMessage.RequestUri;
             var queryString = requestUri.Query;
@@ -39,7 +42,6 @@ namespace JDCloudSDK.Core.Extensions
                 using (var contentStream = new MemoryStream())
                 {
                     requestContent.CopyToAsync(contentStream).Wait();
-                    //requestContent.CopyToAsync(contentStream).RunSynchronously();
                     if (contentStream.Length > 0)
                     {
                         requestModel.Content = contentStream.ToArray();
@@ -68,11 +70,17 @@ namespace JDCloudSDK.Core.Extensions
                     throw new Exception("service name not config , if you not use default endpoint please config service in sign");
                 }
                 requestModel.ServiceName = serviceName;
-            } 
-            requestModel.SignType = ParameterConstant.SIGN_SHA256;
+            }
+            JDCloudSignVersionType jDCloudSignVersionType = GlobalConfig.GetInstance().SignVersionType;
+            if (signType != null && signType.HasValue)
+            {
+                jDCloudSignVersionType = signType.Value;
+            }
+            requestModel.SignType = jDCloudSignVersionType;
             requestModel.Uri = requestUri;
             requestModel.QueryParameters = queryString;
             requestModel.OverrddenDate = overWriteDate;
+
             if (!(requestUri.Scheme.ToLower() == "http" && requestUri.Port == 80) &&
                 !(requestUri.Scheme.ToLower() == "https" && requestUri.Port == 443)) {
                 requestModel.RequestPort = requestUri.Port;
@@ -80,7 +88,7 @@ namespace JDCloudSDK.Core.Extensions
             foreach (var headerKeyValue in headers) {
                 requestModel.AddHeader(headerKeyValue.Key, string.Join(",", headerKeyValue.Value));
             }
-            JDCloudSigner jDCloudSigner = new JDCloudSigner();
+            IJDCloudSigner jDCloudSigner = SignUtil.GetJDCloudSigner(jDCloudSignVersionType);
             SignedRequestModel signedRequestModel = jDCloudSigner.Sign(requestModel, credentials);
             var signedHeader = signedRequestModel.RequestHead;
             foreach (var key in signedHeader.Keys)
@@ -93,6 +101,8 @@ namespace JDCloudSDK.Core.Extensions
             }
             return httpRequestMessage;
         }
+
+        
     }
 }
 #endif

@@ -2,9 +2,11 @@
 using JDCloudSDK.Core.Common;
 using JDCloudSDK.Core.Utils;
 using System;
-using System.Collections.Generic;
+using System.Collections.Generic; 
 using System.Text;
+#if !NET20&&!NET30
 using System.Linq;
+#endif
 using System.Globalization;
 
 namespace JDCloudSDK.Core.Auth.Sign
@@ -48,26 +50,76 @@ namespace JDCloudSDK.Core.Auth.Sign
         /// <param name="credentials"></param>
         /// <returns></returns>
         public SignedRequestModel Sign(RequestModel requestModel, Credential credentials) {
-            string nonceId =Guid.NewGuid().ToString().ToLower();
+            string nonceId = "";
+            if (!requestModel.NonceId.IsNullOrWhiteSpace())
+            {
+                nonceId = requestModel.NonceId;
+            }
+            else if (requestModel.Header != null &&
+                 requestModel.Header.Count > 0 &&
+                 requestModel.Header.ContainsKey(ParameterConstant.X_JDCLOUD_NONCE))
+            {
+                List<string> headValues = requestModel.Header[ParameterConstant.X_JDCLOUD_NONCE];
+                if (headValues != null && headValues.Count > 0)
+                {
+                    nonceId = headValues[0];
+                }
+                else
+                {
+                    nonceId = Guid.NewGuid().ToString().ToLower();
+                }
+            }
+            else
+            {
+                nonceId = Guid.NewGuid().ToString().ToLower();
+            }
+
             var signDate = requestModel.OverrddenDate == null ? DateTime.Now:requestModel.OverrddenDate.Value;
             string formattedSigningDateTime = signDate.ToString(ParameterConstant.DATA_TIME_FORMAT);
             string formattedSigningDate = signDate.ToString(ParameterConstant.HEADER_DATA_FORMAT);
-            string scope = GenerateScope(formattedSigningDate, requestModel.ServiceName, requestModel.RegionName);
+            string scope = SignUtil.GenerateScope(formattedSigningDate, requestModel.ServiceName, requestModel.RegionName,ParameterConstant.JDCLOUD_TERMINATOR);
             var requestHeader = requestModel.Header;
             requestHeader.Add(ParameterConstant.X_JDCLOUD_DATE,
                               new List<string> { formattedSigningDateTime } );
-            requestHeader.Add(ParameterConstant.X_JDCLOUD_NONCE, 
-                              new List<string> { nonceId });
-            var contentSHA256 = CalculateContentHash(requestModel);
-            var canonicalRequest = CreateCanonicalRequest(requestModel, contentSHA256);
-            var stringToSign = CreateStringToSign(canonicalRequest, formattedSigningDateTime, scope);
+            if (!requestModel.Header.ContainsKey(ParameterConstant.X_JDCLOUD_NONCE)) {
+                requestHeader.Add(ParameterConstant.X_JDCLOUD_NONCE,
+                                new List<string> { nonceId });
+            }
+          
+            var contentSHA256 = "";
+            if (requestHeader.ContainsKey(ParameterConstant.X_JDCLOUD_CONTENT_SHA256))
+            {
+                List<string> contentSha256Value = requestHeader[ParameterConstant.X_JDCLOUD_CONTENT_SHA256];
+                if (contentSha256Value != null && contentSha256Value.Count > 0)
+                {
+                    contentSHA256 = contentSha256Value[0];
+                } 
+            }
+            if (contentSHA256.IsNullOrWhiteSpace())
+            {
+                contentSHA256 = SignUtil.CalculateContentHash(requestModel.Content);
+            }
+            var requestParameters = OrderRequestParameters(requestModel.QueryParameters);
+            string path = "";
+            StringBuilder stringBuilder = new StringBuilder();
+            if (!requestModel.ResourcePath.TrimStart().StartsWith("/")) {
+                stringBuilder.Append("/");
+            }
+            stringBuilder.Append(requestModel.ResourcePath);
+            path = stringBuilder.ToString();
+            var canonicalRequest = SignUtil.CreateCanonicalRequest(requestParameters,
+                GetCanonicalizedResourcePath(path,false),
+                requestModel.HttpMethod.ToUpper()
+                ,GetCanonicalizedHeaderString(requestModel),
+                GetSignedHeadersString(requestModel), contentSHA256);
+            var stringToSign = SignUtil.CreateStringToSign(canonicalRequest, formattedSigningDateTime, scope, ParameterConstant.JDCLOUD2_SIGNING_ALGORITHM);
 
             byte[] kSecret = System.Text.Encoding.UTF8.GetBytes($"JDCLOUD2{credentials.SecretAccessKey}");
             byte[] kDate =SignUtil.Sign(formattedSigningDate, kSecret, ParameterConstant.SIGN_SHA256);
             byte[] kRegion = SignUtil.Sign(requestModel.RegionName, kDate, ParameterConstant.SIGN_SHA256);
             byte[] kService = SignUtil.Sign(requestModel.ServiceName, kRegion, ParameterConstant.SIGN_SHA256);
             byte[] signingKey = SignUtil.Sign(ParameterConstant.JDCLOUD_TERMINATOR, kService, ParameterConstant.SIGN_SHA256);
-            byte[] signature = ComputeSignature(stringToSign, signingKey);
+            byte[] signature = SignUtil.ComputeSignature(stringToSign, signingKey);
            // Console.WriteLine($" kSecret={ BitConverter.ToString(kSecret).Replace("-", "")}");
            // Console.WriteLine($" kDate={ BitConverter.ToString(kDate).Replace("-", "")}");
            // Console.WriteLine($" kRegion={ BitConverter.ToString(kRegion).Replace("-", "")}");
@@ -106,41 +158,12 @@ namespace JDCloudSDK.Core.Auth.Sign
 
        
 
-        /// <summary>
-        /// 计算签名
-        /// </summary>
-        /// <param name="stringToSign">需要签名的字符串</param>
-        /// <param name="signingKey">签名使用的key</param>
-        /// <returns>签名后的字节数组信息</returns>
-        private byte[] ComputeSignature(string stringToSign, byte[] signingKey)
-        {
-            byte[] stringToSignBytes = System.Text.Encoding.UTF8.GetBytes(stringToSign); 
-            return SignUtil.Sign(stringToSignBytes, signingKey, ParameterConstant.SIGN_SHA256);
-        }
+        
 
 
 
 
-        /// <summary>
-        ///  获得待计算签名的字符串
-        /// </summary>
-        /// <param name="canonicalRequest">canonicalRequest 字符串</param>
-        /// <param name="formattedSigningDateTime">签名时间信息</param>
-        /// <param name="scope">签名 scope 信息</param>
-        /// <returns>计算签名的字符串</returns>
-        private string CreateStringToSign(string canonicalRequest,
-                                     string formattedSigningDateTime,string scope)
-        {
-            string stringToSign = new StringBuilder(ParameterConstant.JDCLOUD2_SIGNING_ALGORITHM)
-                  .Append(ParameterConstant.LINE_SEPARATOR)
-                  .Append(formattedSigningDateTime)
-                  .Append(ParameterConstant.LINE_SEPARATOR)
-                  .Append(scope)
-                  .Append(ParameterConstant.LINE_SEPARATOR)
-                  .Append(StringUtils.ByteToHex(SignUtil.SignHash(canonicalRequest), true))
-                  .ToString();
-            return stringToSign;
-        }
+       
         /// <summary>
         /// order request parameters
         /// </summary>
@@ -189,7 +212,17 @@ namespace JDCloudSDK.Core.Auth.Sign
             }
             if (paramDic != null && paramDic.Count > 0) {
                 StringBuilder resultBuilder = new StringBuilder();
+#if !NET20 && !NET30
                 var orderParamDic = paramDic.OrderBy(p => p.Key);
+#else
+
+
+                var orderParamDic = new SortedDictionary<string, string>(); ;
+                foreach (var item in paramDic)
+                {
+                    orderParamDic.Add(item.Key, item.Value);
+                }
+#endif
                 foreach (var param in orderParamDic) {
                     resultBuilder.Append(param.Key).Append("=").Append(param.Value);
                     resultBuilder.Append("&");
@@ -199,39 +232,7 @@ namespace JDCloudSDK.Core.Auth.Sign
             return string.Empty;
         }
 
-        /// <summary>
-        /// 
-        /// </summary>
-        /// <param name="requestModel"></param>
-        /// <param name="contentSha256"></param>
-        /// <returns></returns>
-        private string CreateCanonicalRequest(RequestModel requestModel, string contentSha256) {
-            var requestParameters = OrderRequestParameters(requestModel.QueryParameters);
-            string path = "";
-            StringBuilder stringBuilder = new StringBuilder();
-          //  stringBuilder.Append(requestModel.Uri.Host);
-          //  if (requestModel.RequestPort != null && requestModel.RequestPort > 0) {
-          //      stringBuilder.Append(":").Append(requestModel.RequestPort);
-          //  }
-            if (!requestModel.ResourcePath.TrimStart().StartsWith("/")) {
-                stringBuilder.Append("/");
-            } 
-            stringBuilder.Append(requestModel.ResourcePath);
-            path = stringBuilder.ToString();
-            string canonicalRequest = new StringBuilder(requestModel.HttpMethod)
-                .Append(ParameterConstant.LINE_SEPARATOR)
-                .Append(GetCanonicalizedResourcePath(path, false))
-                .Append(ParameterConstant.LINE_SEPARATOR)
-                .Append(requestParameters)
-                .Append(ParameterConstant.LINE_SEPARATOR)
-                .Append(GetCanonicalizedHeaderString(requestModel))
-                .Append(ParameterConstant.LINE_SEPARATOR)
-                .Append(GetSignedHeadersString(requestModel))
-                .Append(ParameterConstant.LINE_SEPARATOR)
-                .Append(contentSha256)
-                .ToString(); 
-            return canonicalRequest;
-        }
+        
 
 
         /// <summary>
@@ -241,11 +242,20 @@ namespace JDCloudSDK.Core.Auth.Sign
         /// <returns>签名头信息字符串</returns>
         private string GetSignedHeadersString(RequestModel requestModel)
         {
-            var headers = requestModel.Header;
+            var headers = requestModel.Header; 
+#if !NET20 && !NET30
             var keys = headers.Keys;
             List<string> keysList = keys.ToList().OrderBy(p => p.ToLower(CultureInfo.GetCultureInfo("en-US"))).ToList();
+#else
+            List<string> keysList = new List<string>();
+            foreach (var item in headers.Keys)
+            {
+                keysList.Add(item);
+            }
+            keysList.Sort();
+#endif
             StringBuilder stringBuilder = new StringBuilder();
-            foreach (String header in keysList)
+            foreach (string header in keysList)
             {
                 if (ShouldExcludeHeaderFromSigning(header))
                 {
@@ -267,9 +277,18 @@ namespace JDCloudSDK.Core.Auth.Sign
         /// <returns>规范化头信息字符串</returns>
         private string GetCanonicalizedHeaderString(RequestModel requestModel)
         {
-            var headers = requestModel.Header;
+            var headers = requestModel.Header; 
+#if !NET20 && !NET30
             var keys = headers.Keys;
             List<string> keysList = keys.ToList().OrderBy(p => p.ToLower(CultureInfo.GetCultureInfo("en-US"))).ToList();
+#else
+            List<string> keysList = new List<string>();
+            foreach (var item in headers.Keys)
+            {
+                keysList.Add(item);
+            }
+            keysList.Sort();
+#endif
             StringBuilder stringBuilder = new StringBuilder();
             foreach (var item in keysList)
             {
@@ -303,7 +322,20 @@ namespace JDCloudSDK.Core.Auth.Sign
         /// <returns>是否是需要排除的头信息</returns>
         private bool ShouldExcludeHeaderFromSigning(string header)
         {
+#if !NET20 && !NET30
             return LIST_OF_HEADERS_TO_IGNORE_IN_LOWER_CASE.Contains(header.ToLower());
+#else
+            var result = false;
+            foreach (var item in LIST_OF_HEADERS_TO_IGNORE_IN_LOWER_CASE)
+            {
+                if (header.ToLower() == item.ToLower())
+                {
+                    result = true;
+
+                }
+            }
+            return result;
+#endif 
         }
 
 
@@ -334,66 +366,11 @@ namespace JDCloudSDK.Core.Auth.Sign
             }
         }
 
-        /// <summary>
-        /// 计算http content SHA256 hash 校验值
-        /// </summary>
-        /// <param name="requestModel">http  请求信息</param>
-        /// <returns>计算后的16进制加密的 content 信息</returns>
-        protected string CalculateContentHash(RequestModel requestModel)
-        {
-            try
-            {
-                byte[] content = requestModel.Content;
-                if (content == null || content.Length<=0)
-                {
-                    content = new byte[0];
-                }
-                string contentSha256 = StringUtils.ByteToHex(SignUtil.SignHash(content), true);
-                return contentSha256;
-
-            }
-            catch (Exception ex)
-            {
-
-                throw new Exception("get the request content sha256 error", ex);
-            }
-        }
+        
 
 
 
-        /// <summary>
-        ///  获得待计算签名的字符串
-        /// </summary>
-        /// <param name="canonicalRequest">canonicalRequest 字符串</param>
-        /// <param name="requestModel">需要签名的参数信息</param>
-        /// <returns>计算签名的字符串</returns>
-        private string CreateStringToSign(string canonicalRequest,
-                                     RequestModel requestModel)
-        {
-
-            string formatDate = requestModel.OverrddenDate == null || !requestModel.OverrddenDate.HasValue ?
-               DateTime.UtcNow.ToString(ParameterConstant.HEADER_DATA_FORMAT) : requestModel.OverrddenDate.Value.ToString(ParameterConstant.HEADER_DATA_FORMAT);
-            StringBuilder scopeBuilder = new StringBuilder();
-            scopeBuilder.Append(formatDate)
-                .Append("/")
-                .Append(requestModel.RegionName)
-                .Append("/")
-                .Append(requestModel.ServiceName)
-                .Append("/")
-                .Append(ParameterConstant.JDCLOUD_TERMINATOR);
-          
-            //需要构造scope
-            string scope = scopeBuilder.ToString();
-            string stringToSign = new StringBuilder(requestModel.SignType)
-                  .Append(ParameterConstant.LINE_SEPARATOR)
-                  .Append(requestModel.Header[ParameterConstant.X_JDCLOUD_DATE][0])
-                  .Append(ParameterConstant.LINE_SEPARATOR)
-                  .Append(scope)
-                  .Append(ParameterConstant.LINE_SEPARATOR)
-                  .Append(StringUtils.ByteToHex(SignUtil.SignHash(canonicalRequest), true))
-                  .ToString();
-            return stringToSign;
-        }
+       
 
 
     
@@ -451,29 +428,9 @@ namespace JDCloudSDK.Core.Auth.Sign
             }
 
             return requestModel;
-        } 
-        /// <summary>
-        /// Returns the scope to be used for the signing.
-        /// </summary>
-        /// <param name="dateStamp">日期戳</param>
-        /// <param name="serviceName">服务名</param>
-        /// <param name="regionName">区域名</param>
-        /// <returns>Scope 字符串</returns>
-        private string GenerateScope(string dateStamp, string serviceName, string regionName)
-        {
-            StringBuilder stringBuilder = new StringBuilder();
-            stringBuilder.Append(dateStamp)
-                .Append("/")
-                .Append(regionName)
-                .Append("/")
-                .Append(serviceName)
-                .Append("/")
-                .Append(ParameterConstant.JDCLOUD_TERMINATOR);
-            return stringBuilder.ToString();
         }
 
-
-
+         
     }
 
 }
