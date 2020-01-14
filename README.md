@@ -27,7 +27,7 @@
 
 ```csharp
 
-    // .net framework 3.5 or 4.0 HttpWebRequest
+    // .net framework 2.0 3.0 3.5 or 4.0 HttpWebRequest
 
     var credentials = new Credentials("accesskey", "secretKey");
     string url = "http://xohk7ybhwien.cn-north-1.jdcloud-api.net:8000/todo/api/v1/tasks/getAllOrUniqueTask";
