@@ -49,4 +49,4 @@
 
 ```
 
-注意，如果使用京东云Dotnet Core Open API SDK 的 JDCloud.SDK.Core 1.1.0 以上版本 包含此签名功能，不需要单独使用此工具
+注意，如果使用京东云Dotnet Core Open API SDK 的 JDCloud.SDK.Core 1.0.0 以上版本 包含此签名功能，不需要单独使用此工具
