@@ -2,8 +2,7 @@
 
 [![Build status](https://ci.appveyor.com/api/projects/status/sy68ga8pvt9vi4vs/branch/master?svg=true)](https://ci.appveyor.com/project/lishjun01/jdcloud-sdk-net-signer/branch/master)
 
-## 简介
-<em>NOTICE:</em> 此版本未经过测试，不能用于生产环境  
+## 简介 
 
 &emsp;&emsp;此包为京东云 dotnet SDK 的签名包，使用签名包可以通过open Api 或者 APIM 网关调用后端的服务。  
 &emsp;&emsp;为了方便您理解SDK中的一些概念和参数的含义，使用SDK前建议您先查看OpenAPI使用入门。要了解每个API的具体参数和含义，请参考程序注释或参考[OpenAPI&SDK](https://www.jdcloud.com/help/faq?act=3)下具体产品线的API文档。
@@ -50,4 +49,4 @@
 
 ```
 
-注意，如果使用京东云Dotnet Core Open API SDK 的 JDCloud.SDK.Core 1.0.0 以上版本 包含此签名功能，不需要单独使用此工具
+注意，如果使用京东云Dotnet Core Open API SDK 的 JDCloud.SDK.Core 1.1.0 以上版本 包含此签名功能，不需要单独使用此工具
