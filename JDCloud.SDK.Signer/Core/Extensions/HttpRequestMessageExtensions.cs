@@ -51,7 +51,7 @@ namespace JDCloudSDK.Core.Extensions
                 requestModel.ContentType = requestContent.Headers.ContentType.ToString();
             }
             requestModel.HttpMethod = requestMethod.ToString().ToUpper();
-            var pathRegion = requestUri.GetRequestVersion();
+            var pathRegion = requestUri.GetRequestRegion();
             if (!string.IsNullOrWhiteSpace(pathRegion)) {
                 requestModel.RegionName = pathRegion;
             }
