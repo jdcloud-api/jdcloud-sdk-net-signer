@@ -11,8 +11,6 @@ namespace NetFrameworkTest
         [Test]
         public void TestMethod1()
         {
-            //"8EC5C825FB08E97F3E09043DA0557861"
-            //"A314732B21F8633D32D473859F502C20"
             string aKey = System.Environment.GetEnvironmentVariable("JDCLOUD_ACCESS_KEY");
             string sKey = System.Environment.GetEnvironmentVariable("JDCLOUD_SECRET_ACCESS_KEY");
             var credentials = new Credentials(aKey, sKey);
